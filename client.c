@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<string.h>
 #include<stdlib.h>
 #include<unistd.h>
 #include<sys/wait.h>
@@ -6,13 +7,16 @@
 #include<sys/types.h>
 #include<fcntl.h>
 
-char *fifo = "/home/barbosa/.Backup/fifo";
+#define SIZE 512
 
 // client main
 int main(int argc, char const *argv[]) {
-    /* code */
-    char b;
+    // set fifo location
+    char *fifo = strcat(getenv("HOME"),"/.Backup/fifo");
     int fd;
+
+    /* code */
+    printf("%s\n",fifo);
 
     // at least, it must have the executable and the operation
     if(argc < 2) {
@@ -22,7 +26,7 @@ int main(int argc, char const *argv[]) {
 
     // tries to open the pipe
     if((fd = open(fifo,O_WRONLY)) == -1) {
-      printf("Error: Could not open the pipe!\n")
+      printf("Error: Could not open the pipe!\n");
       exit(1);
     }
 

@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<string.h>
 #include<stdlib.h>
 #include<unistd.h>
 #include<sys/wait.h>
@@ -8,11 +9,15 @@
 
 #define SIZE 512
 
-char *fifo = "/home/barbosa/.Backup/fifo";
-
+// server main
 int main(int argc, char const *argv[]) {
-    int read,fd;
+    // set fifo location
+    char *fifo = strcat(getenv("HOME"),"/.Backup/fifo");
+    int r,fd;
     char b[SIZE];
+
+    /* code */
+    printf("%s\n",fifo);
 
     // creates named pipe
     if(mkfifo(fifo,0666) == -1) {
@@ -24,8 +29,8 @@ int main(int argc, char const *argv[]) {
     while(1) {
       fd = open(fifo,O_RDONLY);
       // ends with Ctrl + D
-      while((read = read(fd,&b,SIZE)) > 0) {
-        write(1,&b,read);
+      while((r = read(fd,&b,SIZE)) > 0) {
+        write(1,&b,r);
       }
       close(fd);
     }
