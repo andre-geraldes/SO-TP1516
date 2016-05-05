@@ -16,14 +16,12 @@ int main(int argc, char const *argv[]) {
     int r,fd;
     char b[SIZE];
 
-    /* code */
-    printf("%s\n",fifo);
+    // clear screen
+    system("clear");
+    puts("_____ SOBUSRV _____");
 
     // creates named pipe
-    if(mkfifo(fifo,0666) == -1) {
-      printf("Error: Could not create the named pipe!\n");
-      exit(1);
-    };
+    mkfifo(fifo,0666);
 
     // reads continualy from the named pipe
     while(1) {

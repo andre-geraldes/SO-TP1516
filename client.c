@@ -13,10 +13,8 @@
 int main(int argc, char const *argv[]) {
     // set fifo location
     char *fifo = strcat(getenv("HOME"),"/.Backup/fifo");
-    int fd;
-
-    /* code */
-    printf("%s\n",fifo);
+    char command[512];
+    int fd,i;
 
     // at least, it must have the executable and the operation
     if(argc < 2) {
@@ -36,6 +34,21 @@ int main(int argc, char const *argv[]) {
       exit(1);
     }
 
+    // concatenates argvs into one command
+    strcpy(command,argv[1]);
+    for(i=2;i<argc;i++) {
+      strcat(command," ");
+      strcat(command,argv[i]);
+    }
+    command[strlen(command)] = '\n';
+    command[strlen(command)] = '\0';
+
+    // send command
+    write(fd,command,strlen(command)-1);
+
+    // wait for signal
+
+    // close pipe descriptor
     close(fd);
 
     return 0;
