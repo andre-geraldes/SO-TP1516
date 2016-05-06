@@ -46,7 +46,7 @@ int main(int argc, char const *argv[]) {
     }
 
     // concatenates argvs into one command
-    sprintf(command,"%d\t%s",getppid(),argv[1]);
+    sprintf(command,"%d\t%s",getpid(),argv[1]);
     for(i=2;i<argc;i++) {
       // verifies if the file exists
       sprintf(command,"%s %s",command,argv[i]);
