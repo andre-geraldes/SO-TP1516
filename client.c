@@ -56,18 +56,30 @@ int main(int argc, char const *argv[]) {
     // send command
     write(fd,command,l);
 
-    // wait for signal
+    // wait for signals
     signal(SIGUSR1,hand);
     signal(SIGUSR2,hand);
-    pause();
 
-    // receives the signal
-    if(result == 0) { // successfully done
-      puts("Good");
-    } else if (result == 1) { // something wen't wrong
-      puts("Bad");
-    } else { // nothing happened
-      puts("Nothing");
+    // prepare the success status print
+    char status[8];
+    if(strcmp(argv[1],"backup") == 0) {
+      strcpy(status,"copied");
+    } else if(strcmp(argv[1],"restore") == 0) {
+      strcpy(status,"restored");
+    }
+
+    // prints status of every file and waits for signals
+    for(i=2;i<argc;i++) {
+      pause();
+      // receives the signal
+      if(result == 0) { // successfully done
+        printf("%s: %s\n",argv[i],status);
+      } else if (result == 1) { // something wen't wrong
+        printf("%s: %s\n",argv[i],"error");
+      } else {
+        puts("Error: Nothing was done!");
+      }
+      result = -1; // reset the variable for the next file
     }
 
     // close pipe descriptor
