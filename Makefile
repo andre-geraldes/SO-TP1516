@@ -14,6 +14,8 @@ server:
 
 dir:
 	mkdir $(DIR)
+	mkdir $(DIR)data
+	mkdir $(DIR)metadata
 
 # clean options
 cleanall: clean cleandir
