@@ -10,7 +10,6 @@
 #define SIZE 512
 
 int running = 0; // number of requests running
-int pids[5]; // holds the PIDs
 char *fifo; // path to the named pipe
 
 // queue structure
@@ -30,13 +29,16 @@ void backup(int pid, char *command) {
   token = strtok(NULL,delimiters);
   // tokenize all files
   while(token != NULL) {
+    // we know the filename
     // execute every file
     if(fork() == 0) {
-      errno = execlp("gzip","gzip","-f","-k",token,NULL);
+      // execute the script
+      errno = execlp("sh","sh","backup.sh",token,NULL);
       exit(errno);
     } else {
       wait(&status);
       if(WEXITSTATUS(status) == 0) {
+        // move the file.gz to the designed folder
         kill(pid,SIGUSR1);
       } else {
         kill(pid,SIGUSR2);
@@ -80,7 +82,6 @@ void restore(int pid, char *command) {
 
 // execute request function
 void executeRequest(int pid, char *command) {
-  int r;
   char *token,copy[512];
   char *delimiters = " ";
 
@@ -99,7 +100,8 @@ void executeRequest(int pid, char *command) {
 }
 
 // server main
-int main(int argc, char const *argv[]) {
+// int main(int argc, char const *argv[])
+int main() {
     // set fifo location
     fifo = strcat(getenv("HOME"),"/.Backup/fifo");
     int r,fd,pid;
@@ -121,10 +123,10 @@ int main(int argc, char const *argv[]) {
         // server handles at maximun 5 request simultaneously
         if(running < 5) {
           if(fork() == 0) {
+            running++;
             executeRequest(pid,command);
+            running--;
             _exit(0);
-          } else {
-
           }
         } else {
           // enqueue request
