@@ -11,44 +11,98 @@
 
 int running = 0; // number of requests running
 int pids[5]; // holds the PIDs
+char *fifo; // path to the named pipe
 
 // queue structure
 
 // functions' headers
-int executeRequest(int pid, char *command);
+void executeRequest(int pid, char *command);
+void backup(int pid, char *command);
+void restore(int pid, char *command);
 
-// execute request function
-int executeRequest(int pid, char *command) {
-  int files;
-  char *token;
-  char *delimiters = " ";
+// backup operation
+void backup(int pid, char *command) {
+  int status,errno;
+  char *token, *delimiters = " ";
 
-  // get the first token
-  token = strtok(command,delimiters);
-  if(strcmp(token,"backup")) { //backup
-
-  } else { // restore
-
-  }
-
-  files = 0;
-  // iterates all over the others tokens
-  token = strtok(NULL, delimiters);
+  // token == backup
+  token = strtok(command, delimiters);
+  token = strtok(NULL,delimiters);
+  // tokenize all files
   while(token != NULL) {
-    files++;
-    kill(pid,SIGUSR1);
+    // execute every file
+    if(fork() == 0) {
+      errno = execlp("gzip","gzip","-f","-k",token,NULL);
+      exit(errno);
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) == 0) {
+        kill(pid,SIGUSR1);
+      } else {
+        kill(pid,SIGUSR2);
+      }
+    }
+    // guarantee that many signals arrive to the client
     sleep(1);
+    // get the next token
     token = strtok(NULL, delimiters);
   }
+}
 
-  return files;
+// restore operation
+void restore(int pid, char *command) {
+  int status,errno;
+  char *token, *delimiters = " ";
+
+  // token == backup
+  token = strtok(command, delimiters);
+  token = strtok(NULL,delimiters);
+  // tokenize all files
+  while(token != NULL) {
+    // execute every file
+    if(fork() == 0) {
+      errno = execlp("gunzip","gunzip","-f","-k",token,NULL);
+      exit(errno);
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) == 0) {
+        kill(pid,SIGUSR1);
+      } else {
+        kill(pid,SIGUSR2);
+      }
+    }
+    // guarantee that many signals arrive to the client
+    sleep(1);
+    // get the next token
+    token = strtok(NULL, delimiters);
+  }
+}
+
+// execute request function
+void executeRequest(int pid, char *command) {
+  int r;
+  char *token,copy[512];
+  char *delimiters = " ";
+
+  // gets a copy of the commands
+  strcpy(copy,command);
+
+  // get the first token
+  token = strtok(copy,delimiters);
+  if(strcmp(token,"backup") == 0) {
+    // backup
+    backup(pid,command);
+  } else {
+    // restore
+    restore(pid,command);
+  }
 }
 
 // server main
 int main(int argc, char const *argv[]) {
     // set fifo location
-    char *fifo = strcat(getenv("HOME"),"/.Backup/fifo");
-    int r,fd,pid,er;
+    fifo = strcat(getenv("HOME"),"/.Backup/fifo");
+    int r,fd,pid;
     char buffer[SIZE],command[SIZE];
 
     // clear screen
@@ -67,7 +121,7 @@ int main(int argc, char const *argv[]) {
         // server handles at maximun 5 request simultaneously
         if(running < 5) {
           if(fork() == 0) {
-            er = executeRequest(pid,command);
+            executeRequest(pid,command);
             _exit(0);
           } else {
 

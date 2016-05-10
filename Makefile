@@ -18,10 +18,13 @@ dir:
 	mkdir $(DIR)metadata
 
 # clean options
-cleanall: clean cleandir
+cleanall: clean cleandir cleangz
 
 clean:
 	rm sobucli sobusrv
 
 cleandir:
 	rm -r $(DIR)
+
+cleangz:
+	rm *.gz
