@@ -61,13 +61,16 @@ void restore(int pid, char *command) {
   token = strtok(NULL,delimiters);
   // tokenize all files
   while(token != NULL) {
+    // we know the filename
     // execute every file
     if(fork() == 0) {
-      errno = execlp("gunzip","gunzip","-f","-k",token,NULL);
+      // execute the script
+      errno = execlp("sh","sh","restore.sh",token,NULL);
       exit(errno);
     } else {
       wait(&status);
       if(WEXITSTATUS(status) == 0) {
+        // move the file.gz to the designed folder
         kill(pid,SIGUSR1);
       } else {
         kill(pid,SIGUSR2);
@@ -90,11 +93,9 @@ void executeRequest(int pid, char *command) {
 
   // get the first token
   token = strtok(copy,delimiters);
-  if(strcmp(token,"backup") == 0) {
-    // backup
+  if(strcmp(token,"backup") == 0) { // backup
     backup(pid,command);
-  } else {
-    // restore
+  } else { // restore
     restore(pid,command);
   }
 }
@@ -131,8 +132,6 @@ int main() {
         } else {
           // enqueue request
         }
-
-
       }
       close(fd);
     }

@@ -18,7 +18,7 @@ dir:
 	mkdir $(DIR)metadata
 
 # clean options
-cleanall: clean cleandir cleangz
+cleanall: clean cleandir
 
 clean:
 	rm sobucli sobusrv
