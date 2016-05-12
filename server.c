@@ -8,163 +8,152 @@
 #include<fcntl.h>
 
 #define SIZE 512
+#define BACKUP 0
+#define RESTORE 1
 
 int running = 0; // number of requests running
-char *fifo; // path to the named pipe
+char fifo[SIZE]; // path to the named pipe
 
 // queue structure
 
 // functions' headers
-void executeRequest(int pid, char *command);
-void backup(int pid, char *command);
-void restore(int pid, char *command);
+void processRequest(int pid, char *command);
+void executeRequest(int pid, char *command, int op);
 int backupSteps(int it, char *fsha, char *token);
 int restoreSteps(int it, char *fsha, char *token);
 
+// steps of restore
+
+
 // steps of backup
-int backupSteps(int it, char fsha[], char * token) {
-  int errno;
+int backupSteps(int it, char *fsha, char *token) {
+  int errno,status;
 
   switch(it) {
     case 0 : {
-      errno = execlp("gzip","gzip","-f","-k",token,NULL);
-      return(errno);
+      if(fork() == 0) {
+          errno = execlp("gzip","gzip","-f","-k",token,NULL);
+          _exit(errno);
+      }
+      wait(&status);
+      return WEXITSTATUS(status);
       break;
     }
 
     case 1 : {
       char buffer[SIZE];
       int fd[2],status;
-      pipe(fd);
 
+      pipe(fd);
+      // calculates file's sha1sum
       if(fork() == 0) {
         dup2(fd[1],1); // redirects STDOUT to pipe
         errno = execlp("sha1sum","sha1sum",token,NULL);
-        close(fd[0]);
-        close(fd[1]);
         _exit(errno);
-      } else {
-        wait(&status);
-        if(WEXITSTATUS(status) == 0) {
-          read(fd[0],buffer,SIZE); // reads from the pipe
-          *fsha = strtok(buffer," ");
-          //fsha = strtok(buffer," "); // gets the digest
-          close(fd[1]);
-          close(fd[0]);
-        }
-        return WEXITSTATUS(status);
       }
+      wait(&status);
+      if(WEXITSTATUS(status) == 0) {
+        close(fd[1]);
+        read(fd[0],buffer,SIZE); // reads from the pipe
+        strcpy(fsha,strtok(buffer," "));
+        close(fd[0]);
+      }
+      return WEXITSTATUS(status);
       break;
     }
 
     case 2 : {
-      char compressed[SIZE],*target;
+      char compressed[SIZE],target[SIZE];
       sprintf(compressed,"%s%s",token,".gz");
-      puts(getenv("HOME"));
-      //errno = execlp("mv","mv",compressed,target,NULL);
-      //return(errno);
+      sprintf(target,"%s%s%s%s",getenv("HOME"),"/.Backup","/data/",fsha);
+      if(fork() == 0) {
+        // move compressed file to the designated directory
+        errno = execlp("mv","mv",compressed,target,NULL);
+        _exit(errno);
+      }
+      wait(&status);
+      return WEXITSTATUS(status);
       break;
     }
 
     case 3 : {
-      char *dir = strcat(getenv("HOME"),"/.Backup");
-      dir = strcat(dir,"/metadata");
-      errno = execlp("cd","cd",dir,NULL);
-      return(errno);
+      char dir[SIZE];
+      sprintf(dir,"%s%s%s",getenv("HOME"),"/.Backup","/metadata");
+      // change directory to /metadata
+      errno = chdir(dir);
+      return errno;
       break;
     }
 
     case 4 : {
       char link[SIZE];
       sprintf(link,"../data/%s",fsha);
-      errno = execlp("ln","ln","-s","-f",link,token, NULL);
+      if(fork() == 0) {
+        // creates linker from metadata to data
+        errno = execlp("ln","ln","-s","-f",link,token, NULL);
+        _exit(errno);
+      }
+      wait(&status);
+      return WEXITSTATUS(status);
       break;
     }
   }
   return 0;
 }
 
-// backup operation
-void backup(int pid, char *command) {
-  int status,errno,i,error;
-  char *token, *delimiters = " ",fsha[512];
-
-  // token == backup
+// execute request by operation
+void executeRequest(int pid, char *command, int op) {
+  int errno,i,error;
+  char *token, *delimiters = " ",fsha[SIZE],cot[SIZE];
+  // token == backup || token == restore
   token = strtok(command, delimiters);
   token = strtok(NULL,delimiters); // gets the next token
   // tokenize all files
   while(token != NULL) {
+    strcpy(cot,token);
     error = 0;
-    for(i=0;i<3 && !error;i++) {
-      if(fork() == 0) {
-        errno = backupSteps(i,fsha,token);
-        _exit(errno);
-      } else {
-        wait(&status);
-        // error
-        if(WEXITSTATUS(status) != 0) {
-          kill(pid,SIGUSR2);
-          error = 1;
+    for(i=0;(i<5 && !error);i++) {
+      switch(op) {
+        case BACKUP : {
+          errno = backupSteps(i,fsha,cot);
+          break;
         }
+        case RESTORE : {
+          errno = backupSteps(i,fsha,cot);
+          break;
+        }
+      }
+      // checks if there was an error
+      if(errno != 0) {
+        printf("error %d\n",i);
+        kill(pid,SIGUSR2);
+        error = 1;
       }
     }
     // all went good
     if(!error) {
       kill(pid,SIGUSR1);
     }
-    // guarantee that many signals arrive to the client
+    // guarantees that many signals arrive to the client
     sleep(1);
     // get the next token
-    token = strtok(NULL, delimiters);
-  }
-}
-
-// restore operation
-void restore(int pid, char *command) {
-  int status,errno;
-  char *token, *delimiters = " ";
-
-  // token == backup
-  token = strtok(command, delimiters);
-  token = strtok(NULL,delimiters);
-  // tokenize all files
-  while(token != NULL) {
-    // we know the filename
-    // execute every file
-    if(fork() == 0) {
-      // execute the script
-      errno = execlp("sh","sh","restore.sh",token,NULL);
-      exit(errno);
-    } else {
-      wait(&status);
-      if(WEXITSTATUS(status) == 0) {
-        // move the file.gz to the designed folder
-        kill(pid,SIGUSR1);
-      } else {
-        kill(pid,SIGUSR2);
-      }
-    }
-    // guarantee that many signals arrive to the client
-    sleep(1);
-    // get the next token
-    token = strtok(NULL, delimiters);
+    token = strtok(NULL," ");
   }
 }
 
 // execute request function
-void executeRequest(int pid, char *command) {
-  char *token,copy[512];
-  char *delimiters = " ";
-
-  // gets a copy of the commands
+void processRequest(int pid, char *command) {
+  char *token,copy[512],*delimiters = " ";
+  // gets a copy of the commands so it doesnt delete the original command
   strcpy(copy,command);
-
   // get the first token
   token = strtok(copy,delimiters);
-  if(strcmp(token,"backup") == 0) { // backup
-    backup(pid,command);
-  } else { // restore
-    restore(pid,command);
+  if(strcmp(token,"backup") == 0) {
+    // backup
+    executeRequest(pid,command,BACKUP);
+  } else if(strcmp(token,"restore")){
+    // restore
+    executeRequest(pid,command,RESTORE);
   }
 }
 
@@ -172,17 +161,14 @@ void executeRequest(int pid, char *command) {
 // int main(int argc, char const *argv[])
 int main() {
     // set fifo location
-    fifo = strcat(getenv("HOME"),"/.Backup/fifo"); //here
+    sprintf(fifo,"%s%s",getenv("HOME"),"/.Backup/fifo");
     int r,fd,pid;
     char buffer[SIZE],command[SIZE];
-
     // clear screen
     system("clear");
     puts("_____ SOBUSRV _____");
-
     // creates named pipe
     mkfifo(fifo,0666);
-
     // keeps reading from the named pipe
     while(1) {
       fd = open(fifo,O_RDONLY);
@@ -193,7 +179,7 @@ int main() {
         if(running < 5) {
           if(fork() == 0) {
             running++;
-            executeRequest(pid,command);
+            processRequest(pid,command);
             running--;
             _exit(0);
           }
