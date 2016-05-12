@@ -21,10 +21,12 @@ char *local; // path of the local directory
 void processRequest(int pid, char *command);
 void executeRequest(int pid, char *command, int op);
 int backupSteps(int it, char *fsha, char *token);
-int restoreSteps(int it, char *fsha, char *token);
+int restoreSteps(int it, char *token);
 
 // steps of restore
-
+int restoreSteps(int it, char *token) {
+  return 0;
+}
 
 // steps of backup
 int backupSteps(int it, char *fsha, char *token) {
@@ -123,7 +125,7 @@ void executeRequest(int pid, char *command, int op) {
           break;
         }
         case RESTORE : {
-          errno = backupSteps(i,fsha,token);
+          errno = restoreSteps(i,token);
           break;
         }
       }
@@ -167,36 +169,37 @@ void processRequest(int pid, char *command) {
 // server main
 // int main(int argc, char const *argv[])
 int main() {
-    // set fifo location
-    sprintf(fifo,"%s%s",getenv("HOME"),"/.Backup/fifo");
-    // set local directory
-    local = strdup(getenv("PWD"));
-    int r,fd,pid;
-    char buffer[SIZE],command[SIZE];
-    // clear screen
-    system("clear");
-    puts("_____ SOBUSRV _____");
-    // creates named pipe
-    mkfifo(fifo,0666);
-    // keeps reading from the named pipe
-    while(1) {
-      fd = open(fifo,O_RDONLY);
-      while((r = read(fd,&buffer,SIZE)) > 0) {
-        write(1,&buffer,r);
-        sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
-        // server handles at maximun 5 request simultaneously
-        if(running < 5) {
-          if(fork() == 0) {
-            running++;
-            processRequest(pid,command);
-            running--;
-            _exit(0);
-          }
-        } else {
-          // enqueue request
+  int r,fd,pid;
+  char buffer[SIZE],command[SIZE];
+  // set fifo location
+  sprintf(fifo,"%s%s",getenv("HOME"),"/.Backup/fifo");
+  // set local directory
+  local = strdup(getenv("PWD"));
+  // clear screen
+  system("clear");
+  puts("_____ SOBUSRV _____");
+  // creates named pipe
+  mkfifo(fifo,0666);
+  // keeps reading from the named pipe
+  while(1) {
+    fd = open(fifo,O_RDONLY);
+    while((r = read(fd,&buffer,SIZE)) > 0) {
+      write(1,&buffer,r);
+      sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
+      // server handles at maximun 5 request simultaneously
+      if(running < 5) {
+        // creates a child process to process request
+        if(fork() == 0) {
+          running++;
+          processRequest(pid,command);
+          running--;
+          _exit(0);
         }
+      } else {
+        // enqueue request
       }
-      close(fd);
     }
-    return 0;
+    close(fd);
+  }
+  return 0;
 }
