@@ -21,10 +21,70 @@ char *local; // path of the local directory
 void processRequest(int pid, char *command);
 void executeRequest(int pid, char *command, int op);
 int backupSteps(int it, char *fsha, char *token);
-int restoreSteps(int it, char *token);
+int restoreSteps(char *token);
 
 // steps of restore
-int restoreSteps(int it, char *token) {
+int restoreSteps(char *token) {
+  int errno,status,fd,fd1[2],fd2[2],fd3[2],bytes;
+  char *metadata = strdup(getenv("HOME"));
+  char buffer[SIZE];
+
+  metadata = strcat(metadata,"./Backup/metadata");
+  errno = chdir(metadata);
+
+  // set path to the file in local directory for overwrite
+  char *path = strdup(local);
+  sprintf(path,"%s/%s",path,token);
+  // creates fd to the file
+  fd = open(path,O_WRONLY);
+
+  pipe(fd1);
+  close(fd1[1]);
+
+  if(fork() == 0) { // awk
+    pipe(fd2);
+    dup2(0,fd2[0]);
+    dup2(1,fd1[1]);
+    close(fd2[1]);
+    errno = execlp("awk","awk","{print $11}",NULL);
+    _exit(errno);
+
+    if(fork() == 0) { // grep
+      pipe(fd3);
+      dup2(0,fd3[0]);
+      dup2(1,fd2[1]);
+      close(fd3[1]);
+      errno = execlp("grep","grep",token,NULL);
+      _exit(errno);
+
+      if(fork() == 0) { // ls -l
+        dup2(1,fd3[1]);
+        errno = execlp("ls","ls","-l",NULL);
+        _exit(errno);
+      }
+    }
+  }
+  dup2(0,fd1[0]);
+  dup2(1,1);
+  bytes = read(fd1[0],buffer,SIZE);
+  write(1,buffer,bytes);
+  dup2(1,fd);
+
+
+  if(fork() == 0) {
+    errno = execlp("gunzip","gunzip","-",NULL);
+    _exit(errno);
+  }
+
+  wait(&status);
+  if(WEXITSTATUS(status) != 0) {
+    dup2(1,1);
+    printf("Error: Could not restore!\n");
+    close(fd);
+    return 1;
+  }
+
+  close(fd);
   return 0;
 }
 
@@ -118,23 +178,27 @@ void executeRequest(int pid, char *command, int op) {
   // tokenize all files
   while(token != NULL) {
     error = 0;
-    for(i=0;(i<5 && !error);i++) {
-      switch(op) {
-        case BACKUP : {
+    switch(op) {
+      case BACKUP : {
+        for(i=0;(i<5 && !error);i++) {
           errno = backupSteps(i,fsha,token);
-          break;
+          // checks if there was an error
+          if(errno != 0) {
+            kill(pid,SIGUSR2);
+            error = 1;
+          }
         }
-        case RESTORE : {
-          errno = restoreSteps(i,token);
-          break;
-        }
+        break;
       }
 
-      // checks if there was an error
-      if(errno != 0) {
-        printf("error %d\n",i);
-        kill(pid,SIGUSR2);
-        error = 1;
+      case RESTORE : {
+        errno = restoreSteps(token);
+        // checks if there was an error
+        if(errno != 0) {
+          kill(pid,SIGUSR2);
+          error = 1;
+        }
+        break;
       }
     }
     // all went good
@@ -160,14 +224,13 @@ void processRequest(int pid, char *command) {
   if(strcmp(token,"backup") == 0) {
     // backup
     executeRequest(pid,command,BACKUP);
-  } else if(strcmp(token,"restore")){
+  } else if(strcmp(token,"restore") == 0){
     // restore
     executeRequest(pid,command,RESTORE);
   }
 }
 
 // server main
-// int main(int argc, char const *argv[])
 int main() {
   int r,fd,pid;
   char buffer[SIZE],command[SIZE];
