@@ -6,4 +6,4 @@ FILE=$1
 
 cd $DIR/metadata
 fn=$(ls -l | grep $FILE | awk '{print $11}')
-zcat $fn > $LOCAL/$FILE
+gunzip < $fn > $LOCAL/$FILE
