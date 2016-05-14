@@ -46,6 +46,7 @@ int restoreSteps(char *token) {
     dup2(0,fd2[0]);
     dup2(1,fd1[1]);
     close(fd2[1]);
+    close(fd1[0]);
     errno = execlp("awk","awk","{print $11}",NULL);
     _exit(errno);
 
@@ -54,22 +55,21 @@ int restoreSteps(char *token) {
       dup2(0,fd3[0]);
       dup2(1,fd2[1]);
       close(fd3[1]);
+      close(fd2[0]);
       errno = execlp("grep","grep",token,NULL);
       _exit(errno);
 
       if(fork() == 0) { // ls -l
         dup2(1,fd3[1]);
+        close(fd3[0]);
         errno = execlp("ls","ls","-l",NULL);
         _exit(errno);
       }
     }
   }
-  dup2(0,fd1[0]);
-  dup2(1,1);
-  bytes = read(fd1[0],buffer,SIZE);
-  write(1,buffer,bytes);
-  dup2(1,fd);
 
+  // redirects STDOUT to the file on local dir
+  dup2(1,fd);
 
   if(fork() == 0) {
     errno = execlp("gunzip","gunzip","-",NULL);
