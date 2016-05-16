@@ -35,13 +35,6 @@ int restoreSteps(char *token) {
   // set path to the file in local directory for overwrite
   char *path = strdup(local);
   sprintf(path,"%s/%s",path,token);
-  // creates fd to the file
-  fd = open(path,O_CREAT | O_WRONLY,0666);
-  // checks if created a file descriptor
-  if(fd == -1) {
-    printf("Error: Could not open a file descriptor!");
-    _exit(1);
-  }
   // creates the first pipe
   pipe(fd1);
   if(fork() == 0) {
@@ -56,6 +49,7 @@ int restoreSteps(char *token) {
         wait(&status);
         if(WEXITSTATUS(status) != 0) {
           puts("Error: Could not execute ls!");
+          _exit(1);
         }
         dup2(fd3[0],0);
         dup2(fd2[1],1);
@@ -67,8 +61,8 @@ int restoreSteps(char *token) {
     } else {
       wait(&status);
       if(WEXITSTATUS(status) != 0) {
-        puts("Error: Could not execute grep!");
-        exit(1);
+        puts("Error: File not match on grep!");
+        _exit(1);
       }
       dup2(fd2[0],0);
       dup2(fd1[1],1);
@@ -81,16 +75,23 @@ int restoreSteps(char *token) {
     wait(&status);
     if(WEXITSTATUS(status) != 0) {
       puts("Error: Could not execute awk!");
+      return 1 ;
+    }
+    // creates a FD to the local file
+    fd = open(path,O_CREAT | O_WRONLY,0666);
+    // checks if created a file descriptor
+    if(fd == -1) {
+      printf("Error: Could not open a file descriptor!");
+      return 1;
     }
     // redirects STDIN to the pipe
     close(fd1[1]);
+    // redirects STDOUT to the local file
     dup2(fd1[0],0);
     // gets the path of the compressed file
     bytes = read(fd1[0],buffer,SIZE);
     comp = strndup(buffer,bytes-1);
-
-    wait(0);
-    // test rm local file because of double WR
+    // uncompress the file
     if(fork() == 0) {
       dup2(fd,1);
       errno = execlp("gunzip","gunzip","-c",comp,NULL);

@@ -2,9 +2,3 @@ andre
 jose
 ferro
 geraldes
-
-andre
-jose
-ferro
-geraldes
-
