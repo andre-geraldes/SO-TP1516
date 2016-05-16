@@ -28,11 +28,116 @@ int deleteSteps(char *token);
 
 // steps of delete
 int deleteSteps(char *token) {
-  char *metadata = strdup(getenv("HOME"));
+  int errno,status,fd1[2],fd2[2],fd3[2],bytes;
+  char *metadata = strdup(getenv("HOME")),buffer[SIZE],*link,*lines;
 
   metadata = strcat(metadata,"/.Backup/metadata");
-  chidr(metadata);
+  chdir(metadata);
 
+  pipe(fd1);
+  if(fork() == 0) {
+    pipe(fd2);
+    if(fork() == 0) {
+      pipe(fd3);
+      if(fork() == 0) {
+        dup2(fd3[1],1);
+        errno = execlp("ls","ls","-l",NULL);
+        _exit(errno);
+      } else {
+        wait(&status);
+        if(WEXITSTATUS(status) != 0) {
+          puts("Error: Could not execute ls!");
+          _exit(1);
+        }
+        dup2(fd3[0],0);
+        dup2(fd2[1],1);
+        close(fd3[1]);
+        close(fd2[1]);
+        errno = execlp("grep","grep","-w",token,NULL);
+        _exit(errno);
+      }
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) != 0) {
+        puts("Error: File not match on grep!");
+        _exit(1);
+      }
+      dup2(fd2[0],0);
+      dup2(fd1[1],1);
+      close(fd2[1]);
+      close(fd1[1]);
+      errno = execlp("awk","awk","{print $11}",NULL);
+      _exit(errno);
+    }
+  } else {
+    wait(&status);
+    if(WEXITSTATUS(status) != 0) {
+      puts("Error: Could not execute awk!");
+      return 1;
+    }
+    bytes = read(fd1[0],buffer,SIZE);
+    link = strndup(buffer,bytes-1); // printf("link %s\n",link);
+  }
+
+  pipe(fd1);
+  if(fork() == 0) {
+    pipe(fd2);
+    if(fork() == 0) {
+      pipe(fd3);
+      if(fork() == 0) {
+        dup2(fd3[1],1);
+        errno = execlp("ls","ls","-l",NULL);
+        _exit(errno);
+      } else {
+        wait(&status);
+        if(WEXITSTATUS(status) != 0) {
+          puts("Error: Could not execute ls!");
+          _exit(1);
+        }
+        dup2(fd3[0],0);
+        dup2(fd2[1],1);
+        close(fd3[1]);
+        close(fd2[1]);
+        errno = execlp("grep","grep",link,NULL);
+        _exit(errno);
+      }
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) != 0) {
+        puts("Error: File not match on grep!");
+        _exit(1);
+      }
+      dup2(fd2[0],0);
+      dup2(fd1[1],1);
+      close(fd2[1]);
+      close(fd1[1]);
+      errno = execlp("wc","wc","-l",NULL);
+      _exit(errno);
+    }
+  } else {
+    wait(&status);
+    if(WEXITSTATUS(status) != 0) {
+      puts("Error: Could not execute wc!");
+      return 1;
+    }
+    bytes = read(fd1[0],buffer,SIZE);
+    lines = strndup(buffer,bytes-1); // printf("lines %s\n",lines);
+  }
+
+  if(strcmp(lines,"1") == 0) {
+    // remove in data if it is the last reference
+    if(fork() == 0) {
+      errno = execlp("rm","rm",link,NULL);
+      _exit(errno);
+    }
+  }
+  wait(0);
+  if(fork() == 0) {
+    // remove in metadata
+    errno = execlp("rm","rm",token,NULL);
+    _exit(errno);
+  }
+  wait(0);
 
   return 0;
 }
@@ -273,7 +378,7 @@ void processRequest(int pid, char *command) {
   }
 }
 
-// server main
+// server main -> QUEUE STRUCT
 int main() {
   int r,fd,pid;
   char buffer[SIZE],command[SIZE];
@@ -293,14 +398,16 @@ int main() {
       write(1,&buffer,r);
       sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
       // server handles at maximun 5 request simultaneously
+      // enqueue
       if(running < 5) {
-        // creates a child process to process request
+        // dequeue
+        running++;
         if(fork() == 0) {
-          running++;
+          // creates a child process to process request
           processRequest(pid,command);
-          running--;
           _exit(0);
         }
+        running--;
       } else {
         // enqueue request
       }
