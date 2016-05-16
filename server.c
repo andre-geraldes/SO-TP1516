@@ -26,64 +26,79 @@ int restoreSteps(char *token);
 // steps of restore
 int restoreSteps(char *token) {
   int errno,status,fd,fd1[2],fd2[2],fd3[2],bytes;
-  char *metadata = strdup(getenv("HOME"));
+  char *metadata = strdup(getenv("HOME")),*comp=NULL;
   char buffer[SIZE];
 
-  metadata = strcat(metadata,"./Backup/metadata");
+  metadata = strcat(metadata,"/.Backup/metadata");
   errno = chdir(metadata);
 
   // set path to the file in local directory for overwrite
   char *path = strdup(local);
   sprintf(path,"%s/%s",path,token);
   // creates fd to the file
-  fd = open(path,O_WRONLY);
-
+  fd = open(path,O_CREAT | O_WRONLY,0666);
+  // checks if created a file descriptor
+  if(fd == -1) {
+    printf("Error: Could not open a file descriptor!");
+    _exit(1);
+  }
+  // creates the first pipe
   pipe(fd1);
-  close(fd1[1]);
-
-  if(fork() == 0) { // awk
+  if(fork() == 0) {
     pipe(fd2);
-    dup2(0,fd2[0]);
-    dup2(1,fd1[1]);
-    close(fd2[1]);
-    close(fd1[0]);
-    errno = execlp("awk","awk","{print $11}",NULL);
-    _exit(errno);
-
-    if(fork() == 0) { // grep
+    if(fork() == 0) {
       pipe(fd3);
-      dup2(0,fd3[0]);
-      dup2(1,fd2[1]);
-      close(fd3[1]);
-      close(fd2[0]);
-      errno = execlp("grep","grep",token,NULL);
-      _exit(errno);
-
-      if(fork() == 0) { // ls -l
-        dup2(1,fd3[1]);
-        close(fd3[0]);
+      if(fork() == 0) {
+        dup2(fd3[1],1);
         errno = execlp("ls","ls","-l",NULL);
         _exit(errno);
+      } else {
+        wait(&status);
+        if(WEXITSTATUS(status) != 0) {
+          puts("Error: Could not execute ls!");
+        }
+        dup2(fd3[0],0);
+        dup2(fd2[1],1);
+        close(fd3[1]);
+        close(fd2[1]);
+        errno = execlp("grep","grep","-w",token,NULL);
+        _exit(errno);
       }
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) != 0) {
+        puts("Error: Could not execute grep!");
+        exit(1);
+      }
+      dup2(fd2[0],0);
+      dup2(fd1[1],1);
+      close(fd2[1]);
+      close(fd1[1]);
+      errno = execlp("awk","awk","{print $11}",NULL);
+      _exit(errno);
     }
+  } else {
+    wait(&status);
+    if(WEXITSTATUS(status) != 0) {
+      puts("Error: Could not execute awk!");
+    }
+    // redirects STDIN to the pipe
+    close(fd1[1]);
+    dup2(fd1[0],0);
+    // gets the path of the compressed file
+    bytes = read(fd1[0],buffer,SIZE);
+    comp = strndup(buffer,bytes-1);
+
+    wait(0);
+    // test rm local file because of double WR
+    if(fork() == 0) {
+      dup2(fd,1);
+      errno = execlp("gunzip","gunzip","-c",comp,NULL);
+      _exit(errno);
+    }
+    wait(0);
+
   }
-
-  // redirects STDOUT to the file on local dir
-  dup2(1,fd);
-
-  if(fork() == 0) {
-    errno = execlp("gunzip","gunzip","-",NULL);
-    _exit(errno);
-  }
-
-  wait(&status);
-  if(WEXITSTATUS(status) != 0) {
-    dup2(1,1);
-    printf("Error: Could not restore!\n");
-    close(fd);
-    return 1;
-  }
-
   close(fd);
   return 0;
 }
