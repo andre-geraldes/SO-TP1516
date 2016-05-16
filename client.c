@@ -29,7 +29,7 @@ int main(int argc, char const *argv[]) {
 
     // at least, it must have the executable and the operation
     if(argc < 2) {
-      printf("Syntax Error: Try sobucli [ backup | restore ]\n");
+      printf("Syntax Error: Try sobucli [ backup | restore | delete ]\n");
       exit(1);
     }
 
@@ -40,8 +40,8 @@ int main(int argc, char const *argv[]) {
     }
 
     // checks if the operation is valid
-    if(strcmp(argv[1],"backup") != 0 && strcmp(argv[1],"restore") != 0) {
-      printf("Syntax Error: Try sobucli [ backup | restore ]\n");
+    if(strcmp(argv[1],"backup") != 0 && strcmp(argv[1],"restore") != 0 && strcmp(argv[1],"delete") != 0) {
+      printf("Syntax Error: Try sobucli [ backup | restore | delete ]\n");
       exit(1);
     }
 
@@ -66,12 +66,14 @@ int main(int argc, char const *argv[]) {
       strcpy(status,"copied");
     } else if(strcmp(argv[1],"restore") == 0) {
       strcpy(status,"restored");
+    } else if(strcmp(argv[1],"delete") == 0) {
+      strcpy(status,"deleted");
     }
 
     // prints status of every file and waits for signals
     for(i=2;i<argc;i++) {
       pause();
-      // receives the signal
+      // receives threstoree signal
       if(result == 0) { // successfully done
         printf("%s: %s\n",argv[i],status);
       } else if (result == 1) { // something wen't wrong

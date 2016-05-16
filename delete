@@ -1,0 +1,17 @@
+#!/bin/bash
+
+DIR=/home/$USER/.Backup
+FILE=$1
+
+cd $DIR/metadata
+link=$(ls -l | grep -w $FILE | awk '{print $11}')
+lines=$(ls -l | grep $link | wc -l)
+echo $lines
+if [ $lines -eq 1 ]
+then
+  echo "delete"
+  rm $link
+  rm $FILE
+else
+  echo "not delete"
+fi

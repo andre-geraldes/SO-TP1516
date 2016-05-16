@@ -10,6 +10,8 @@
 #define SIZE 512
 #define BACKUP 0
 #define RESTORE 1
+#define DELETE 2
+#define GC 3
 
 int running = 0; // number of requests running
 char fifo[SIZE]; // path to the named pipe
@@ -22,6 +24,18 @@ void processRequest(int pid, char *command);
 void executeRequest(int pid, char *command, int op);
 int backupSteps(int it, char *fsha, char *token);
 int restoreSteps(char *token);
+int deleteSteps(char *token);
+
+// steps of delete
+int deleteSteps(char *token) {
+  char *metadata = strdup(getenv("HOME"));
+
+  metadata = strcat(metadata,"/.Backup/metadata");
+  chidr(metadata);
+
+
+  return 0;
+}
 
 // steps of restore
 int restoreSteps(char *token) {
@@ -216,6 +230,16 @@ void executeRequest(int pid, char *command, int op) {
         }
         break;
       }
+
+      case DELETE : {
+        errno = deleteSteps(token);
+        // checks if there was an error
+        if(errno != 0) {
+          kill(pid,SIGUSR2);
+          error = 1;
+        }
+        break;
+      }
     }
     // all went good
     if(!error) {
@@ -243,6 +267,9 @@ void processRequest(int pid, char *command) {
   } else if(strcmp(token,"restore") == 0){
     // restore
     executeRequest(pid,command,RESTORE);
+  } else if(strcmp(token,"delete") == 0) {
+    // delete
+    executeRequest(pid,command,DELETE);
   }
 }
 
