@@ -124,6 +124,12 @@ int deleteSteps(char *token) {
     lines = strndup(buffer,bytes-1); // printf("lines %s\n",lines);
   }
 
+  if(fork() == 0) {
+    // remove in metadata
+    errno = execlp("rm","rm",token,NULL);
+    _exit(errno);
+  }
+  wait(0);
   if(strcmp(lines,"1") == 0) {
     // remove in data if it is the last reference
     if(fork() == 0) {
@@ -131,13 +137,6 @@ int deleteSteps(char *token) {
       _exit(errno);
     }
   }
-  wait(0);
-  if(fork() == 0) {
-    // remove in metadata
-    errno = execlp("rm","rm",token,NULL);
-    _exit(errno);
-  }
-  wait(0);
 
   return 0;
 }
@@ -231,7 +230,7 @@ int backupSteps(int it, char *fsha, char *token) {
     case 0 : {
       chdir(local);
       if(fork() == 0) {
-          errno = execlp("gzip","gzip","-f","-k",token,NULL);
+          errno = execlp("gzip","gzip","-kfr",token,NULL);
           _exit(errno);
       }
       wait(&status);
