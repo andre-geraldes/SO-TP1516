@@ -3,3 +3,11 @@
 DIR=/home/$USER/.Backup
 
 cd $DIR/data
+for file in *
+do
+  lines=$(ls -l ../metadata | grep -w $file | wc -l)
+  if [ $lines -eq 0 ]
+  then
+    rm $file
+  fi
+done

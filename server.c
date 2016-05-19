@@ -377,7 +377,7 @@ void processRequest(int pid, char *command) {
   }
 }
 
-// server main -> QUEUE STRUCT
+// server main
 int main() {
   int r,fd,pid;
   char buffer[SIZE],command[SIZE];
@@ -397,18 +397,16 @@ int main() {
       write(1,&buffer,r);
       sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
       // server handles at maximun 5 request simultaneously
-      // enqueue
-      if(running < 5) {
-        // dequeue
+      if(running < 1) {
         running++;
         if(fork() == 0) {
           // creates a child process to process request
           processRequest(pid,command);
+          running--;
           _exit(0);
         }
-        running--;
       } else {
-        // enqueue request
+        wait(0); // doesn't work
       }
     }
     close(fd);
