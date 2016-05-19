@@ -29,7 +29,7 @@ int main(int argc, char const *argv[]) {
 
     // at least, it must have the executable and the operation
     if(argc < 2) {
-      printf("Syntax Error: Try sobucli [ backup | restore | delete ]\n");
+      printf("Syntax Error: Try sobucli [ backup | restore | delete | gc ]\n");
       exit(1);
     }
 
@@ -40,8 +40,9 @@ int main(int argc, char const *argv[]) {
     }
 
     // checks if the operation is valid
-    if(strcmp(argv[1],"backup") != 0 && strcmp(argv[1],"restore") != 0 && strcmp(argv[1],"delete") != 0) {
-      printf("Syntax Error: Try sobucli [ backup | restore | delete ]\n");
+    if(strcmp(argv[1],"backup") != 0 && strcmp(argv[1],"restore") != 0 && strcmp(argv[1],"delete") != 0 && strcmp(argv[1],"gc") != 0) {
+      printf("Syntax Error: Try sobucli [ backup | restore | delete | gc ]\n");
+      close(fd);
       exit(1);
     }
 

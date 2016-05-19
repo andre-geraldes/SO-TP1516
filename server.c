@@ -8,6 +8,7 @@
 #include<fcntl.h>
 
 #define SIZE 512
+
 #define BACKUP 0
 #define RESTORE 1
 #define DELETE 2
@@ -25,6 +26,113 @@ void executeRequest(int pid, char *command, int op);
 int backupSteps(int it, char *fsha, char *token);
 int restoreSteps(char *token);
 int deleteSteps(char *token);
+int gcSteps(int pid);
+
+// steps of gc
+int gcSteps(int pid) {
+  int errno,status,fd1[2],fd2[2],fd3[2],bytes;
+  char *data,buffer[SIZE],*file,*files;
+
+  data = strdup(getenv("HOME"));
+  data = strcat(data,"/.Backup/data");
+  chdir(data);
+
+  // get the files on data
+  pipe(fd2);
+  if(fork() == 0) {
+    pipe(fd3);
+    if(fork() == 0) {
+      dup2(fd3[1],1);
+      errno = execlp("ls","ls",NULL);
+      _exit(errno);
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) != 0) {
+        puts("Error: Could not execute ls!");
+        _exit(1);
+      }
+      dup2(fd3[0],0);
+      dup2(fd2[1],1);
+      close(fd3[1]);
+      close(fd2[1]);
+      errno = execlp("xargs","xargs",NULL);
+      _exit(errno);
+    }
+  } else {
+    wait(&status);
+    if(WEXITSTATUS(status) != 0) {
+      puts("Error: Could not execute xargs!");
+      _exit(1);
+    }
+    bytes = read(fd2[0],buffer,SIZE);
+    files = strndup(buffer,bytes-1); // printf("xargs %s\n",files);
+  }
+
+  // verifies every file of data
+  file = strdup(strsep(&files," "));
+  while(file != NULL) {
+    pipe(fd1);
+    if(fork() == 0) {
+      pipe(fd2);
+      if(fork() == 0) {
+        pipe(fd3);
+        if(fork() == 0) {
+          dup2(fd3[1],1);
+          errno = execlp("ls","ls","-l","../metadata",NULL);
+          _exit(errno);
+        } else {
+          wait(&status);
+          if(WEXITSTATUS(status) != 0) {
+            puts("Error: Could not execute ls!");
+            _exit(1);
+          }
+          dup2(fd3[0],0);
+          dup2(fd2[1],1);
+          close(fd3[1]);
+          close(fd2[1]);
+          errno = execlp("grep","grep","-w",file,NULL);
+          _exit(errno);
+        }
+      } else {
+        wait(&status);
+        if(WEXITSTATUS(status) != 0) {
+          // puts("Error: File not match on grep!");
+          errno = execlp("rm","rm",file,NULL);
+          _exit(1);
+        }
+        dup2(fd2[0],0);
+        dup2(fd1[1],1);
+        close(fd2[1]);
+        close(fd1[1]);
+        errno = execlp("wc","wc","-l",NULL);
+        _exit(errno);
+      }
+    } else {
+      wait(&status);
+      if(WEXITSTATUS(status) != 0) {
+        puts("Error: Could not execute wc!");
+        kill(pid,SIGUSR2);
+        return 1;
+      }
+      /*
+      bytes = read(fd1[0],buffer,SIZE);
+      lines = strndup(buffer,bytes-1); // printf("lines %s\n",lines);
+      // checks if there was any references
+      if(strcmp(lines,"0") == 0) {
+        if(fork() == 0) {
+          puts("Remove");
+          //errno = execlp("rm","rm",token,NULL);
+          //_exit(errno);
+        }
+        wait(0);
+      }
+      */
+    }
+    file = strdup(strsep(&files," "));
+  }
+  kill(pid,SIGUSR1);
+  return 0;
+}
 
 // steps of delete
 int deleteSteps(char *token) {
@@ -137,7 +245,6 @@ int deleteSteps(char *token) {
       _exit(errno);
     }
   }
-
   return 0;
 }
 
@@ -304,8 +411,7 @@ int backupSteps(int it, char *fsha, char *token) {
 // execute request by operation
 void executeRequest(int pid, char *command, int op) {
   int errno,i,error;
-  char *token, *delimiters = " ",fsha[SIZE];
-  fsha[0]='\0';
+  char *token, *delimiters = " ",fsha[SIZE]; fsha[0]='\0';
   // token == backup || token == restore
   token = strsep(&command, delimiters);
   token = strdup(strsep(&command,delimiters)); // gets the next token
@@ -374,10 +480,13 @@ void processRequest(int pid, char *command) {
   } else if(strcmp(token,"delete") == 0) {
     // delete
     executeRequest(pid,command,DELETE);
+  } else if(strcmp(token,"gc") == 0) {
+    // gc
+    gcSteps(pid);
   }
 }
 
-// server main
+// server main - Solve 5 requests
 int main() {
   int r,fd,pid;
   char buffer[SIZE],command[SIZE];
@@ -397,16 +506,16 @@ int main() {
       write(1,&buffer,r);
       sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
       // server handles at maximun 5 request simultaneously
-      if(running < 1) {
+      if(running < 5) {
         running++;
         if(fork() == 0) {
           // creates a child process to process request
           processRequest(pid,command);
-          running--;
           _exit(0);
         }
+        running--;
       } else {
-        wait(0); // doesn't work
+        // wait(0); // doesn't work
       }
     }
     close(fd);
