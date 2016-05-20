@@ -8,6 +8,7 @@
 #include<fcntl.h>
 
 #define SIZE 512
+#define FORKS 5
 
 #define BACKUP 0
 #define RESTORE 1
@@ -17,8 +18,6 @@
 int running = 0; // number of requests running
 char fifo[SIZE]; // path to the named pipe
 char *local; // path of the local directory
-
-// queue structure
 
 // functions' headers
 void processRequest(int pid, char *command);
@@ -414,7 +413,7 @@ void executeRequest(int pid, char *command, int op) {
   char *token, *delimiters = " ",fsha[SIZE]; fsha[0]='\0';
   // token == backup || token == restore
   token = strsep(&command, delimiters);
-  token = strdup(strsep(&command,delimiters)); // gets the next token
+  token = strsep(&command,delimiters); // gets the next token
   // tokenize all files
   while(token != NULL) {
     error = 0;
@@ -458,17 +457,21 @@ void executeRequest(int pid, char *command, int op) {
     // guarantees that many signals arrive to the client
     sleep(1);
     // get the next token
-    token = strdup(strsep(&command,delimiters));
+    token = strsep(&command,delimiters);
     // resets fsha
     fsha[0] = '\0';
   }
+
+  return ;
 }
 
 // execute request function
 void processRequest(int pid, char *command) {
   char *token,*copy,*delimiters = " ";
+
   // gets a copy of the commands so it doesnt delete the original command
   copy = strdup(command);
+
   // get the first token
   token = strtok(copy,delimiters);
   if(strcmp(token,"backup") == 0) {
@@ -484,9 +487,10 @@ void processRequest(int pid, char *command) {
     // gc
     gcSteps(pid);
   }
+  return ;
 }
 
-// server main - Solve 5 requests
+// server main
 int main() {
   int r,fd,pid;
   char buffer[SIZE],command[SIZE];
@@ -496,7 +500,7 @@ int main() {
   local = strdup(getenv("PWD"));
   // clear screen
   system("clear");
-  puts("_____ SOBUSRV _____");
+  puts("----- SOBUSRV -----");
   // creates named pipe
   mkfifo(fifo,0666);
   // keeps reading from the named pipe
@@ -506,17 +510,18 @@ int main() {
       write(1,&buffer,r);
       sscanf(buffer,"%d\t%[^\n]s",&pid,command); // PID and command are OK
       // server handles at maximun 5 request simultaneously
-      if(running < 5) {
+      if(running < FORKS) {
         running++;
         if(fork() == 0) {
           // creates a child process to process request
           processRequest(pid,command);
-          _exit(0);
+          _exit(1);
+        } else if(running >= FORKS) {
+          wait(0);
+          running--;
         }
-        running--;
-      } else {
-        // wait(0); // doesn't work
       }
+
     }
     close(fd);
   }
