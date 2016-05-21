@@ -25,6 +25,3 @@ clean:
 
 cleandir:
 	rm -r $(DIR)
-
-cleangz:
-	rm *.gz
